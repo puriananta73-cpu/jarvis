@@ -8,6 +8,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      _JAVA_OPTIONS: "-Djava.awt.headless=true"
+      GRADLE_OPTS: "-Dorg.gradle.jvmargs=\"-Xmx4096m -Djava.awt.headless=true\" -Djava.awt.headless=true"
 
     steps:
       - name: Checkout Code
@@ -32,7 +35,7 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      - name: Prepare Debug Keystore & Secrets
+      - name: Prepare Debug Keystore, Services & Secrets
         run: |
           touch .env
           echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
@@ -41,6 +44,37 @@ jobs:
           else
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
+          cat << 'EOF' > app/google-services.json
+          {
+            "project_info": {
+              "project_number": "123456789012",
+              "project_id": "jarvis-assistant-app",
+              "storage_bucket": "jarvis-assistant-app.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:123456789012:android:abcdef0123456789",
+                  "android_client_info": {
+                    "package_name": "com.aistudio.jarvisassistant.licaaa"
+                  }
+                },
+                "oauth_client": [],
+                "api_key": [
+                  {
+                    "current_key": "dummy_api_key"
+                  }
+                ],
+                "services": {
+                  "appinvite_service": {
+                    "other_platform_oauth_client": []
+                  }
+                }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
 
       - name: Build APK with Gradle
         run: gradle :app:assembleDebug -x test -x lint -x verifyRoborazziDebug --no-daemon --stacktrace

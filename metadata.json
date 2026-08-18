@@ -1,0 +1,8 @@
+{
+  "name": "Remix Jarvis Assistant",
+  "description": "Hands-free background personal assistant with call monitoring, TTS voice announcements, automated SMS, notification auto-replies, and voice wake-word activation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

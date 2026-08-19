@@ -3,11 +3,15 @@ name: Build Android APK
 on:
   push:
     branches: [ "**" ]
+  release:
+    types: [ published, created ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       _JAVA_OPTIONS: "-Djava.awt.headless=true"
       GRADLE_OPTS: "-Dorg.gradle.jvmargs=\"-Xmx4096m -Djava.awt.headless=true\" -Djava.awt.headless=true"
@@ -62,3 +66,11 @@ jobs:
           name: Jarvis-Assistant-APK
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 14
+
+      - name: Attach APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.event_name == 'release'
+        with:
+          files: app/build/outputs/apk/debug/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

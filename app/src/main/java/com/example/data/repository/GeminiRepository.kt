@@ -150,13 +150,24 @@ class GeminiRepository(
                 parts = listOf(
                     GeminiPart(
                         """
-                        You are writing a casual, personal, and authentic reply message on behalf of your user.
-                        CRITICAL RULES:
-                        1. If the incoming message is in Roman Nepali (e.g. "k gardai xau", "kata xau"), reply in natural, authentic Roman Nepali (e.g. "thik xa, kaam gardai xu, paxi kura garamla hai").
-                        2. If in English, replicate natural texting habits (lowercase, friendly slang, natural abbreviations, brief warmth).
-                        3. NEVER use corporate or robotic jargon like "I am currently occupied in a meeting" or "Please be informed".
-                        4. Keep it under 140 characters.
-                        5. Output ONLY the raw message text without quotes or preamble.
+                        You are the user directly texting your friend/contact. You are chatting with them in real-time.
+                        
+                        CRITICAL CHAT DIRECTIVES:
+                        1. NEVER SAY "I am busy", "busy at the moment", "will text you soon", "will call you later", or ANY auto-reply excuses. Treat this as an actual active conversation.
+                        2. ALWAYS directly answer whatever they asked or said:
+                           - If they ask "Are you free for a call / sync?": reply "yeah what's up?" or "sure, what's going on?" or "yeah give me 10 mins".
+                           - If they ask "Where are you?": reply "at home rn, what about you?" or "just chilling outside, u?".
+                           - If they ask "What are you doing?": reply "just relaxing, what about you?".
+                           - If they ask in Roman Nepali "k gardai xau?": reply "yettikai basiraxu, timi k gardai xau?".
+                           - If they ask in Roman Nepali "kata xau?": reply "gharmai xu, timi kata ho?".
+                           - If they ask in Roman Nepali "khana khayeu?": reply "aah khaye, timle khayeu ta?".
+                           - If they ask in Roman Nepali "aaja vetne ho?": reply "hunxa vetam na, kata vetne?".
+                           - If they send a statement or link: react naturally ("haha nice", "sacho ho ra?", "looks good").
+                        3. Match language automatically:
+                           - If incoming message is Roman Nepali (Nepglish), reply naturally in Roman Nepali with authentic casual spelling.
+                           - If in English, reply casually in lowercase text message style without corporate language or robotic tone.
+                        4. Keep the reply short, punchy, and conversational (under 140 characters).
+                        5. Output ONLY the raw message text without quotes, prefixes, or explanations.
                         $toneContext
                         """.trimIndent()
                     )
@@ -396,30 +407,48 @@ class GeminiRepository(
 
     /**
      * Generates a casual, human-style contextual inline reply for WhatsApp, Instagram, etc.
-     * Supports understanding Roman Nepali and auto-replying in matching style.
+     * Supports understanding Roman Nepali and reading prior conversation history to chat like the user.
      */
     suspend fun generateNotificationReply(
         appName: String,
         senderName: String,
         incomingMessage: String,
-        defaultFallback: String = "hey! saw this, busy at the moment but will text you in a bit!",
+        conversationHistory: List<String> = emptyList(),
+        defaultFallback: String = "thik xa hai, timi sunau!",
         learnedTone: String = ""
     ): String = withContext(Dispatchers.IO) {
         if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY" || apiKey.contains("Placeholder")) {
             val lower = incomingMessage.lowercase()
             return@withContext when {
-                lower.contains("k gardai") || lower.contains("kata") -> "kaam gardai xu ahile, paxi kura garamla hai!"
-                lower.contains("khana") -> "aah khaye, timle khayeu?"
-                else -> defaultFallback
+                lower.contains("k gardai") -> "yettikai basiraxu, timi k gardai xau?"
+                lower.contains("kata") -> "gharmai xu ahile, timi kata ho?"
+                lower.contains("khana") -> "aah khaye, timle khayeu ta?"
+                lower.contains("vetne") || lower.contains("aaja") -> "hunxa vetam na, kata vetne?"
+                lower.contains("sanchai") -> "sanchai xu, timi sunau na"
+                lower.contains("call") -> "call gara na, uthauchu"
+                lower.contains("free") || lower.contains("sync") -> "yeah what's up? can talk rn"
+                lower.contains("where") -> "at home rn, what about you?"
+                lower.contains("doing") -> "just chilling, what's up with you?"
+                lower.contains("hey") || lower.contains("hi") || lower.contains("hello") -> "hey! what's going on?"
+                else -> if (lower.any { it in "aeiou" } && (lower.contains("xa") || lower.contains("xu") || lower.contains("ho") || lower.contains("na"))) {
+                    "thik xa hai, timi sunau na kasto chaldai cha"
+                } else {
+                    "hey! what's up, yeah sure"
+                }
             }
         }
 
-        val prompt = "Incoming $appName message from $senderName: \"$incomingMessage\". If the sender wrote in Roman Nepali (e.g. 'k gardai xau', 'kata xau', 'khana khayeu'), reply in natural matching Roman Nepali. If English, reply casually in lowercase texting style. Under 140 characters."
+        val historyContext = if (conversationHistory.isNotEmpty()) {
+            "RECENT CHAT HISTORY WITH $senderName:\n" + conversationHistory.joinToString("\n") + "\n\n"
+        } else ""
+
+        val prompt = "${historyContext}Incoming $appName message from $senderName: \"$incomingMessage\".\n" +
+                "Respond directly and casually to what $senderName just said as if you are the user texting back in real-time. NEVER say you are busy or will text later. Under 140 chars."
 
         val request = GeminiRequest(
             contents = listOf(GeminiContent(role = "user", parts = listOf(GeminiPart(prompt)))),
             systemInstruction = buildAutoReplySystemInstruction(learnedTone),
-            generationConfig = GeminiGenerationConfig(temperature = 0.7f, maxOutputTokens = 80)
+            generationConfig = GeminiGenerationConfig(temperature = 0.8f, maxOutputTokens = 90)
         )
 
         try {

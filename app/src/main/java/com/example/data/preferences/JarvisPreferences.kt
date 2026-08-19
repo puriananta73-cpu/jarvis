@@ -28,7 +28,7 @@ class JarvisPreferences(context: Context) {
         const val DEFAULT_SMS_TEMPLATE =
             "hey, missed your call! tied up rn, will call you in a bit."
         const val DEFAULT_NOTIF_TEMPLATE =
-            "hey! saw this, busy at the moment but will text you soon!"
+            "thik xa hai, timi sunau!"
         const val DEFAULT_WAKE_WORD = "jarvis"
         const val DEFAULT_PACKAGES = "com.instagram.android,com.whatsapp,com.facebook.orca,org.telegram.messenger"
         const val DEFAULT_TONE_SAMPLES = "k gardai xau? | aaja vetne ho? | thik xa hai | paxi kura garumla | ma aaudai xu | khana khayeu?"

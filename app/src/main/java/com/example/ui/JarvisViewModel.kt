@@ -366,13 +366,20 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
             // 3. Background Tone Training: Learn Roman Nepali and writing patterns
             preferences.addLearnedToneSample(incomingMessage)
 
-            // 4. Generate Smart AI Reply using Gemini API
+            // 4. Generate Smart AI Reply using Gemini API with full conversation context
             val fallbackTemplate = preferences.getNotificationTemplateSync()
             val learnedTone = preferences.getLearnedToneSamplesSync()
+            val priorLogs = repository.getRecentSenderLogs(senderName, limit = 5)
+            val conversationHistory = priorLogs.map { log ->
+                if (log.type == LogType.NOTIFICATION_RECEIVED) "$senderName: ${log.description}"
+                else "Me: ${log.description}"
+            }.reversed()
+
             val aiReply = geminiRepository.generateNotificationReply(
                 appName = appName,
                 senderName = senderName,
                 incomingMessage = incomingMessage,
+                conversationHistory = conversationHistory,
                 defaultFallback = fallbackTemplate,
                 learnedTone = learnedTone
             )

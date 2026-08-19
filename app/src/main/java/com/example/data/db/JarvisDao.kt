@@ -22,6 +22,9 @@ interface JarvisDao {
     @Query("SELECT * FROM jarvis_logs ORDER BY timestamp DESC LIMIT :limit")
     suspend fun getRecentLogsSync(limit: Int = 10): List<JarvisLog>
 
+    @Query("SELECT * FROM jarvis_logs WHERE title LIKE '%' || :senderTitle || '%' OR description LIKE '%' || :senderTitle || '%' ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun getRecentSenderLogsSync(senderTitle: String, limit: Int = 6): List<JarvisLog>
+
     @Query("SELECT COUNT(*) FROM jarvis_logs WHERE type = :type")
     fun getLogCountByType(type: LogType): Flow<Int>
 

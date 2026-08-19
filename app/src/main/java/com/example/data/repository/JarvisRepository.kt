@@ -20,6 +20,9 @@ class JarvisRepository(
     suspend fun getRecentLogs(limit: Int = 10): List<JarvisLog> =
         dao.getRecentLogsSync(limit)
 
+    suspend fun getRecentSenderLogs(senderTitle: String, limit: Int = 6): List<JarvisLog> =
+        dao.getRecentSenderLogsSync(senderTitle, limit)
+
     fun getLogCountByType(type: LogType): Flow<Int> = dao.getLogCountByType(type)
 
     fun getTotalLogCount(): Flow<Int> = dao.getTotalLogCount()

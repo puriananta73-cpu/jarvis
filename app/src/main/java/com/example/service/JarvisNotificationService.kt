@@ -131,16 +131,28 @@ class JarvisNotificationService : NotificationListenerService() {
                 extraData = sbn.key
             )
 
-            // 2. Generate Smart AI Reply with Gemini API
+            // 2. Announce Who Messaged Me audibly if enabled
+            if (prefs.isAnnounceMessagesEnabledSync()) {
+                val speechManager = JarvisSpeechManager.getInstance(applicationContext)
+                val cleanContent = if (incomingContent.length > 80) incomingContent.take(77) + "..." else incomingContent
+                speechManager.speak("Babe, $title messaged you on $appLabel: $cleanContent")
+            }
+
+            // 3. Background Tone Training: Learn Roman Nepali and texting patterns
+            prefs.addLearnedToneSample(incomingContent)
+
+            // 4. Generate Smart AI Reply with Gemini API using learned tone profile
             val fallbackTemplate = prefs.getNotificationTemplateSync()
+            val learnedTone = prefs.getLearnedToneSamplesSync()
             val aiReply = geminiRepository.generateNotificationReply(
                 appName = appLabel,
                 senderName = title,
                 incomingMessage = incomingContent,
-                defaultFallback = fallbackTemplate
+                defaultFallback = fallbackTemplate,
+                learnedTone = learnedTone
             )
 
-            // 3. Extract RemoteInput and dispatch auto-reply
+            // 5. Extract RemoteInput and dispatch auto-reply
             val replySuccess = executeAutoReply(notification, aiReply)
 
             if (replySuccess) {

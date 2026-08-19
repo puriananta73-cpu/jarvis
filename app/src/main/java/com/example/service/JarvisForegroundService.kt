@@ -176,20 +176,56 @@ class JarvisForegroundService : Service() {
             Log.d(TAG, "Wake word triggered: $phrase")
             onWakeWordDetected(phrase)
         }
+        speechManager.setOnSleepWordDetectedListener { phrase ->
+            Log.d(TAG, "Sleep word triggered: $phrase")
+            onSleepWordDetected(phrase)
+        }
+        speechManager.setOnQueryMessagesListener { phrase ->
+            Log.d(TAG, "Query messages triggered: $phrase")
+            onQueryMessagesDetected(phrase)
+        }
+    }
+
+    private fun onQueryMessagesDetected(phrase: String) {
+        serviceScope.launch {
+            val repository = JarvisApplication.instance.repository
+            val geminiRepo = JarvisApplication.instance.geminiRepository
+            val prefs = JarvisApplication.instance.preferences
+            val notifLogs = repository.getRecentLogsByType(LogType.NOTIFICATION_RECEIVED, limit = 5)
+
+            val parsedMessages = notifLogs.map { log ->
+                val app = if (log.title.startsWith("[")) log.title.substringAfter("[").substringBefore("]") else "App"
+                val sender = if (log.title.contains("] ")) log.title.substringAfter("] ") else log.title
+                Triple(app, sender, log.description)
+            }
+
+            val summary = geminiRepo.summarizeIncomingMessages(
+                messages = parsedMessages,
+                learnedTone = prefs.getLearnedToneSamplesSync()
+            )
+
+            speechManager.speak(summary)
+
+            repository.insertLog(
+                type = LogType.SERVICE_EVENT,
+                title = "Who Messaged Me Announced",
+                description = "Answered inquiry \"$phrase\": $summary"
+            )
+        }
     }
 
     private fun onWakeWordDetected(phrase: String) {
         serviceScope.launch {
             JarvisApplication.instance.repository.insertLog(
                 type = LogType.WAKE_WORD_DETECTED,
-                title = "Wake Word Detected",
-                description = "Heard: \"$phrase\". Activated Jarvis main interface.",
+                title = "Companion Activated",
+                description = "Heard: \"$phrase\". Activated companion HUD.",
                 extraData = phrase
             )
         }
 
-        // Announce greeting via TTS
-        speechManager.speak("Yes, boss. Jarvis is online.")
+        // Announce warm companion greeting via TTS
+        speechManager.speak("Hey! I'm right here with you 💕")
 
         // Bring MainActivity to the front
         val openIntent = Intent(this, MainActivity::class.java).apply {
@@ -198,6 +234,21 @@ class JarvisForegroundService : Service() {
             putExtra("EXTRA_DETECTED_PHRASE", phrase)
         }
         startActivity(openIntent)
+    }
+
+    private fun onSleepWordDetected(phrase: String) {
+        serviceScope.launch {
+            JarvisApplication.instance.repository.insertLog(
+                type = LogType.SERVICE_EVENT,
+                title = "Sleep Mode",
+                description = "Heard sleep command: \"$phrase\". Entering standby sleep mode.",
+                extraData = phrase
+            )
+        }
+
+        // Announce warm affectionate goodnight
+        speechManager.speak("Going to sleep now. Call me anytime you need me 💕")
+        speechManager.stopWakeWordListening()
     }
 
     private fun buildForegroundNotification(): Notification {

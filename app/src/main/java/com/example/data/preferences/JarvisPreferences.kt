@@ -22,14 +22,25 @@ class JarvisPreferences(context: Context) {
         const val KEY_TTS_PITCH = "key_tts_pitch"
         const val KEY_TTS_SPEED = "key_tts_speed"
         const val KEY_WAKE_WORD = "key_wake_word"
+        const val KEY_ANNOUNCE_MESSAGES = "key_announce_incoming_messages"
+        const val KEY_LEARNED_TONE_SAMPLES = "key_learned_tone_samples"
 
         const val DEFAULT_SMS_TEMPLATE =
-            "Sorry, I am currently away from my phone and missed your call. I will get back to you shortly."
+            "hey, missed your call! tied up rn, will call you in a bit."
         const val DEFAULT_NOTIF_TEMPLATE =
-            "Hi! This is an automated assistant response on behalf of the user. I'll make sure they receive your message shortly."
+            "hey! saw this, busy at the moment but will text you soon!"
         const val DEFAULT_WAKE_WORD = "jarvis"
         const val DEFAULT_PACKAGES = "com.instagram.android,com.whatsapp,com.facebook.orca,org.telegram.messenger"
+        const val DEFAULT_TONE_SAMPLES = "k gardai xau? | aaja vetne ho? | thik xa hai | paxi kura garumla | ma aaudai xu | khana khayeu?"
     }
+
+    private val _isAnnounceMessagesEnabled = MutableStateFlow(prefs.getBoolean(KEY_ANNOUNCE_MESSAGES, true))
+    val isAnnounceMessagesEnabled: StateFlow<Boolean> = _isAnnounceMessagesEnabled.asStateFlow()
+
+    private val _learnedToneSamples = MutableStateFlow(
+        prefs.getString(KEY_LEARNED_TONE_SAMPLES, DEFAULT_TONE_SAMPLES) ?: DEFAULT_TONE_SAMPLES
+    )
+    val learnedToneSamples: StateFlow<String> = _learnedToneSamples.asStateFlow()
 
     private val _isServiceEnabled = MutableStateFlow(prefs.getBoolean(KEY_SERVICE_ENABLED, true))
     val isServiceEnabled: StateFlow<Boolean> = _isServiceEnabled.asStateFlow()
@@ -128,12 +139,35 @@ class JarvisPreferences(context: Context) {
         _ttsSpeed.value = speed
     }
 
+    fun setAnnounceMessagesEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_ANNOUNCE_MESSAGES, enabled).apply()
+        _isAnnounceMessagesEnabled.value = enabled
+    }
+
+    fun setLearnedToneSamples(samples: String) {
+        prefs.edit().putString(KEY_LEARNED_TONE_SAMPLES, samples).apply()
+        _learnedToneSamples.value = samples
+    }
+
+    fun addLearnedToneSample(newSample: String) {
+        val clean = newSample.trim()
+        if (clean.length < 3 || clean.length > 200) return
+        val current = _learnedToneSamples.value.split(" | ").toMutableList()
+        if (!current.contains(clean)) {
+            current.add(0, clean)
+            val trimmed = current.take(25).joinToString(" | ")
+            setLearnedToneSamples(trimmed)
+        }
+    }
+
     // Direct synchronous getters for background services and broadcast receivers
     fun isServiceEnabledSync(): Boolean = prefs.getBoolean(KEY_SERVICE_ENABLED, true)
     fun isVoiceWakeEnabledSync(): Boolean = prefs.getBoolean(KEY_VOICE_WAKE_ENABLED, true)
     fun isMissedCallTtsEnabledSync(): Boolean = prefs.getBoolean(KEY_MISSED_CALL_TTS_ENABLED, true)
     fun isMissedCallSmsEnabledSync(): Boolean = prefs.getBoolean(KEY_MISSED_CALL_SMS_ENABLED, true)
     fun isNotificationReplyEnabledSync(): Boolean = prefs.getBoolean(KEY_NOTIFICATION_REPLY_ENABLED, true)
+    fun isAnnounceMessagesEnabledSync(): Boolean = prefs.getBoolean(KEY_ANNOUNCE_MESSAGES, true)
+    fun getLearnedToneSamplesSync(): String = prefs.getString(KEY_LEARNED_TONE_SAMPLES, DEFAULT_TONE_SAMPLES) ?: DEFAULT_TONE_SAMPLES
     fun getSmsTemplateSync(): String = prefs.getString(KEY_SMS_TEMPLATE, DEFAULT_SMS_TEMPLATE) ?: DEFAULT_SMS_TEMPLATE
     fun getNotificationTemplateSync(): String = prefs.getString(KEY_NOTIFICATION_TEMPLATE, DEFAULT_NOTIF_TEMPLATE) ?: DEFAULT_NOTIF_TEMPLATE
     fun getWakeWordSync(): String = prefs.getString(KEY_WAKE_WORD, DEFAULT_WAKE_WORD) ?: DEFAULT_WAKE_WORD

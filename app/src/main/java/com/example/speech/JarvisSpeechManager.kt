@@ -59,6 +59,16 @@ class JarvisSpeechManager private constructor(private val context: Context) : Re
     val lastDetectedPhrase: StateFlow<String?> = _lastDetectedPhrase.asStateFlow()
 
     private var onWakeWordDetectedListener: ((String) -> Unit)? = null
+    private var onSleepWordDetectedListener: ((String) -> Unit)? = null
+    private var onQueryMessagesListener: ((String) -> Unit)? = null
+
+    fun setOnSleepWordDetectedListener(listener: (String) -> Unit) {
+        this.onSleepWordDetectedListener = listener
+    }
+
+    fun setOnQueryMessagesListener(listener: (String) -> Unit) {
+        this.onQueryMessagesListener = listener
+    }
 
     init {
         initTTS()
@@ -303,7 +313,42 @@ class JarvisSpeechManager private constructor(private val context: Context) : Re
         val targetWakeWord = prefs.getWakeWordSync().lowercase()
         val normalizedText = text.lowercase()
 
-        if (normalizedText.contains(targetWakeWord) || normalizedText.contains("jarvis") || normalizedText.contains("hey jarvis")) {
+        // 1. Check for "Who messaged me?" in English and Roman Nepali
+        if (normalizedText.contains("who messaged") ||
+            normalizedText.contains("who texted") ||
+            normalizedText.contains("any message") ||
+            normalizedText.contains("check message") ||
+            normalizedText.contains("koi message") ||
+            normalizedText.contains("kasle message") ||
+            normalizedText.contains("message aayo")) {
+            playWakeConfirmationTone()
+            onQueryMessagesListener?.invoke(text)
+            return true
+        }
+
+        // 2. Check for sleep / standby command first (English & Roman Nepali)
+        if (normalizedText.contains("go to sleep") || 
+            normalizedText.contains("goodnight") || 
+            normalizedText.contains("good night") || 
+            normalizedText.contains("standby") || 
+            normalizedText.contains("sleep now") ||
+            normalizedText.contains("suta aba") ||
+            normalizedText.contains("suta")) {
+            playWakeConfirmationTone()
+            onSleepWordDetectedListener?.invoke(text)
+            return true
+        }
+
+        // 3. Check for companion wake word triggers
+        if (normalizedText.contains(targetWakeWord) || 
+            normalizedText.contains("jarvis") || 
+            normalizedText.contains("hey jarvis") || 
+            normalizedText.contains("babe") || 
+            normalizedText.contains("hey babe") || 
+            normalizedText.contains("honey") || 
+            normalizedText.contains("my love") ||
+            normalizedText.contains("sunana") ||
+            normalizedText.contains("maya")) {
             playWakeConfirmationTone()
             onWakeWordDetectedListener?.invoke(text)
             return true

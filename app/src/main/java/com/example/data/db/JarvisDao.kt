@@ -16,6 +16,12 @@ interface JarvisDao {
     @Query("SELECT * FROM jarvis_logs WHERE type = :type ORDER BY timestamp DESC")
     fun getLogsByType(type: LogType): Flow<List<JarvisLog>>
 
+    @Query("SELECT * FROM jarvis_logs WHERE type = :type ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun getRecentLogsByTypeSync(type: LogType, limit: Int = 5): List<JarvisLog>
+
+    @Query("SELECT * FROM jarvis_logs ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun getRecentLogsSync(limit: Int = 10): List<JarvisLog>
+
     @Query("SELECT COUNT(*) FROM jarvis_logs WHERE type = :type")
     fun getLogCountByType(type: LogType): Flow<Int>
 

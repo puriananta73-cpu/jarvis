@@ -14,6 +14,12 @@ class JarvisRepository(
 
     fun getLogsByType(type: LogType): Flow<List<JarvisLog>> = dao.getLogsByType(type)
 
+    suspend fun getRecentLogsByType(type: LogType, limit: Int = 5): List<JarvisLog> =
+        dao.getRecentLogsByTypeSync(type, limit)
+
+    suspend fun getRecentLogs(limit: Int = 10): List<JarvisLog> =
+        dao.getRecentLogsSync(limit)
+
     fun getLogCountByType(type: LogType): Flow<Int> = dao.getLogCountByType(type)
 
     fun getTotalLogCount(): Flow<Int> = dao.getTotalLogCount()

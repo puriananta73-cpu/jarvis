@@ -97,6 +97,10 @@ class MainActivity : ComponentActivity() {
 
                 var currentScreen by remember { mutableStateOf(Screen.DASHBOARD) }
 
+                val companionMood by viewModel.companionMood.collectAsState()
+                val companionChat by viewModel.companionChat.collectAsState()
+                val isGeneratingCompanion by viewModel.isGeneratingCompanion.collectAsState()
+
                 LaunchedEffect(Unit) {
                     viewModel.refreshPermissions()
                 }
@@ -133,6 +137,11 @@ class MainActivity : ComponentActivity() {
                                     isNotificationActive = isNotificationActive,
                                     isVoiceWakeActive = isVoiceWakeActive,
                                     recentLogs = activityLogs,
+                                    companionMood = companionMood,
+                                    companionChat = companionChat,
+                                    isGeneratingCompanion = isGeneratingCompanion,
+                                    onSendMessage = { viewModel.sendCompanionMessage(it) },
+                                    onTriggerCheckIn = { viewModel.triggerProactiveCheckIn() },
                                     onToggleService = { viewModel.toggleMasterService(it) },
                                     onToggleCallHandler = { viewModel.toggleMissedCallSms(it) },
                                     onToggleNotification = { viewModel.toggleNotificationReply(it) },

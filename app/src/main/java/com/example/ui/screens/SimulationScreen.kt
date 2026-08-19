@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -366,6 +367,45 @@ fun SimulationScreen(
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Quick Presets (Roman Nepali & English):",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = SlateTextMuted
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(
+                            "k gardai xau? call gara na" to "Aayush",
+                            "khana khayeu? vetne ho?" to "Pooja",
+                            "Hey! Sync call now?" to "Alex"
+                        ).forEach { (msg, sender) ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0xFF1E293B))
+                                    .border(1.dp, ImmersiveCardBorder, RoundedCornerShape(10.dp))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    .testTag("preset_${sender}")
+                            ) {
+                                Text(
+                                    text = msg,
+                                    fontSize = 10.sp,
+                                    color = CyanAccent,
+                                    modifier = Modifier.clickable {
+                                        incomingMessage = msg
+                                        senderName = sender
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
                     OutlinedTextField(
                         value = incomingMessage,
                         onValueChange = { incomingMessage = it },

@@ -19,6 +19,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -27,6 +30,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -38,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,6 +56,7 @@ import com.example.ui.theme.ImmersiveBg
 import com.example.ui.theme.ImmersiveCard
 import com.example.ui.theme.ImmersiveCardBorder
 import com.example.ui.theme.ImmersiveItemBg
+import com.example.ui.theme.PurpleAccent
 import com.example.ui.theme.SlateTextBright
 import com.example.ui.theme.SlateTextDim
 import com.example.ui.theme.SlateTextMuted
@@ -63,12 +70,15 @@ fun SettingsScreen(
 ) {
     val smsTemplate by viewModel.smsTemplate.collectAsState(initial = "")
     val notifTemplate by viewModel.notificationTemplate.collectAsState(initial = "")
+    val isAnnounceMessages by viewModel.isAnnounceMessagesEnabled.collectAsState(initial = true)
+    val learnedToneSamples by viewModel.learnedToneSamples.collectAsState(initial = "")
     val permissions by viewModel.permissions.collectAsState()
     val ttsSpeedPref by viewModel.ttsSpeed.collectAsState(initial = 1.0f)
     val ttsPitchPref by viewModel.ttsPitch.collectAsState(initial = 1.0f)
 
     var editableSmsTemplate by remember(smsTemplate) { mutableStateOf(smsTemplate) }
     var editableNotifTemplate by remember(notifTemplate) { mutableStateOf(notifTemplate) }
+    var editableToneSamples by remember(learnedToneSamples) { mutableStateOf(learnedToneSamples) }
     var currentTtsSpeed by remember(ttsSpeedPref) { mutableFloatStateOf(ttsSpeedPref) }
 
     LazyColumn(
@@ -328,6 +338,56 @@ fun SettingsScreen(
                     .testTag("tts_settings_card")
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(PurpleAccent.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.VolumeUp,
+                                    contentDescription = null,
+                                    tint = PurpleAccent,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Announce Messages Audibly",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = SlateTextBright
+                                )
+                                Text(
+                                    text = "Tells you who messaged in real-time",
+                                    fontSize = 11.sp,
+                                    color = SlateTextDim
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = isAnnounceMessages,
+                            onCheckedChange = { viewModel.toggleAnnounceMessages(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = PurpleAccent,
+                                checkedTrackColor = PurpleAccent.copy(alpha = 0.3f),
+                                uncheckedThumbColor = SlateTextDim,
+                                uncheckedTrackColor = ImmersiveItemBg
+                            ),
+                            modifier = Modifier.testTag("announce_messages_switch")
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
                     Text(
                         text = "TTS Voice Speed: ${String.format("%.1fx", currentTtsSpeed)}",
                         fontSize = 13.sp,
@@ -351,7 +411,7 @@ fun SettingsScreen(
                     )
                     Button(
                         onClick = {
-                            viewModel.testTts("Jarvis voice synthesis calibrated at ${String.format("%.1fx", currentTtsSpeed)} speed.")
+                            viewModel.testTts("Babe, Jarvis voice is calibrated at ${String.format("%.1fx", currentTtsSpeed)} speed.")
                         },
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = CyanAccent.copy(alpha = 0.2f)),
@@ -359,6 +419,83 @@ fun SettingsScreen(
                     ) {
                         Text("Preview Calibrated Voice", color = CyanAccent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
+                }
+            }
+        }
+
+        // Background Tone Training & Roman Nepali DNA
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(ImmersiveCard.copy(alpha = 0.7f))
+                    .border(1.dp, ImmersiveCardBorder, RoundedCornerShape(22.dp))
+                    .padding(16.dp)
+                    .testTag("tone_training_card")
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(CyanAccent.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Psychology,
+                                contentDescription = null,
+                                tint = CyanAccent,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Learned Tone & Roman Nepali DNA",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SlateTextBright
+                            )
+                            Text(
+                                text = "Trains in background to sound exactly like you",
+                                fontSize = 11.sp,
+                                color = SlateTextDim
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Training Samples (Slang, Roman Nepali, Text Style):",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = SlateTextMuted
+                    )
+
+                    OutlinedTextField(
+                        value = editableToneSamples,
+                        onValueChange = {
+                            editableToneSamples = it
+                            viewModel.updateLearnedToneSamples(it)
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = ImmersiveItemBg,
+                            unfocusedContainerColor = ImmersiveItemBg,
+                            focusedBorderColor = CyanAccent,
+                            unfocusedBorderColor = ImmersiveCardBorder,
+                            focusedTextColor = SlateTextBright,
+                            unfocusedTextColor = SlateTextBright
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("tone_samples_input"),
+                        minLines = 3,
+                        placeholder = {
+                            Text("e.g. k gardai xau? khana khayeu? la hai babe...", color = SlateTextDim, fontSize = 12.sp)
+                        }
+                    )
                 }
             }
         }

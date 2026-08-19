@@ -57,6 +57,8 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
     val isMissedCallTtsEnabled = preferences.isMissedCallTtsEnabled
     val isMissedCallSmsEnabled = preferences.isMissedCallSmsEnabled
     val isNotificationReplyEnabled = preferences.isNotificationReplyEnabled
+    val isAnnounceMessagesEnabled = preferences.isAnnounceMessagesEnabled
+    val learnedToneSamples = preferences.learnedToneSamples
     val smsTemplate = preferences.smsTemplate
     val notificationTemplate = preferences.notificationTemplate
     val wakeWord = preferences.wakeWord
@@ -91,12 +93,155 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
     val wakeWordCount = repository.getLogCountByType(LogType.WAKE_WORD_DETECTED)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    // --- Live Companion AI Dialogue State ---
+    data class CompanionChatMessage(
+        val id: String = java.util.UUID.randomUUID().toString(),
+        val sender: String, // "user" or "companion"
+        val message: String,
+        val outgoingAction: com.example.data.repository.OutgoingMessageAction? = null,
+        val timestamp: Long = System.currentTimeMillis()
+    )
+
+    private val _companionChat = MutableStateFlow<List<CompanionChatMessage>>(
+        listOf(
+            CompanionChatMessage(
+                sender = "companion",
+                message = "Hey you 💕 I'm right here with you. How are you feeling today? Did you eat yet?"
+            )
+        )
+    )
+    val companionChat: StateFlow<List<CompanionChatMessage>> = _companionChat.asStateFlow()
+
+    private val _isGeneratingCompanion = MutableStateFlow(false)
+    val isGeneratingCompanion: StateFlow<Boolean> = _isGeneratingCompanion.asStateFlow()
+
+    private val _companionMood = MutableStateFlow("Devoted & Caring 💕")
+    val companionMood: StateFlow<String> = _companionMood.asStateFlow()
+
     init {
         refreshPermissions()
         // If enabled, ensure service is running
         if (preferences.isServiceEnabledSync()) {
             JarvisForegroundService.startService(app)
         }
+    }
+
+    /**
+     * Talk with the companion AI (via text or voice transcribed input)
+     */
+    fun sendCompanionMessage(userText: String, speakOutput: Boolean = true) {
+        if (userText.isBlank()) return
+        val userMsg = CompanionChatMessage(sender = "user", message = userText)
+        _companionChat.value = _companionChat.value + userMsg
+
+        viewModelScope.launch {
+            _isGeneratingCompanion.value = true
+            _companionMood.value = "Listening & Thinking..."
+
+            val lower = userText.lowercase()
+            // Check if user specifically asked who messaged them
+            if (lower.contains("who messaged") || lower.contains("who texted") || lower.contains("koi message") || lower.contains("kasle message") || lower.contains("any message")) {
+                val notifLogs = repository.getRecentLogsByType(LogType.NOTIFICATION_RECEIVED, limit = 5)
+                val parsedMessages = notifLogs.map { log ->
+                    val app = if (log.title.startsWith("[")) log.title.substringAfter("[").substringBefore("]") else "App"
+                    val sender = if (log.title.contains("] ")) log.title.substringAfter("] ") else log.title
+                    Triple(app, sender, log.description)
+                }
+
+                val summary = geminiRepository.summarizeIncomingMessages(
+                    messages = parsedMessages,
+                    learnedTone = preferences.getLearnedToneSamplesSync()
+                )
+
+                val companionMsg = CompanionChatMessage(
+                    sender = "companion",
+                    message = summary
+                )
+                _companionChat.value = _companionChat.value + companionMsg
+                _isGeneratingCompanion.value = false
+                _companionMood.value = "Devoted & Caring 💕"
+
+                if (speakOutput) {
+                    speechManager.speak(summary)
+                }
+                return@launch
+            }
+
+            val history = _companionChat.value.map { it.sender to it.message }
+            val learnedTone = preferences.getLearnedToneSamplesSync()
+            val response = geminiRepository.converseWithCompanion(userText, history, learnedTone)
+
+            val companionMsg = CompanionChatMessage(
+                sender = "companion",
+                message = response.dialogueResponse,
+                outgoingAction = response.outgoingMessage
+            )
+            _companionChat.value = _companionChat.value + companionMsg
+            _isGeneratingCompanion.value = false
+
+            // Update companion mood based on state
+            if (response.appStateCommand == "SLEEP") {
+                _companionMood.value = "Resting / Sleep Standby 🌙"
+                speechManager.stopWakeWordListening()
+            } else {
+                _companionMood.value = "Devoted & Caring 💕"
+            }
+
+            // Speak response via TTS if enabled
+            if (speakOutput && response.dialogueResponse.isNotBlank()) {
+                speechManager.speak(response.dialogueResponse)
+            }
+
+            // Log action if outgoing message was created
+            if (response.outgoingMessage != null) {
+                val action = response.outgoingMessage
+                repository.insertLog(
+                    type = LogType.AUTO_REPLY_SENT,
+                    title = "Companion Tool Action: ${action.platform ?: "SMS"}",
+                    description = "To: ${action.recipient ?: "Contact"}\nText: \"${action.messageText}\""
+                )
+            }
+        }
+    }
+
+    /**
+     * Trigger a spontaneous, proactive caring check-in
+     */
+    fun triggerProactiveCheckIn() {
+        viewModelScope.launch {
+            _isGeneratingCompanion.value = true
+            _companionMood.value = "Checking in on you 💕"
+
+            val timeOfDay = when (java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)) {
+                in 5..11 -> "morning"
+                in 12..17 -> "afternoon"
+                in 18..22 -> "evening"
+                else -> "late night"
+            }
+
+            val learnedTone = preferences.getLearnedToneSamplesSync()
+            val checkInText = geminiRepository.generateProactiveCheckIn(timeOfDay, "working or relaxing", learnedTone)
+            val checkInMsg = CompanionChatMessage(
+                sender = "companion",
+                message = checkInText
+            )
+            _companionChat.value = _companionChat.value + checkInMsg
+            _isGeneratingCompanion.value = false
+            _companionMood.value = "Devoted & Caring 💕"
+
+            speechManager.playWakeConfirmationTone()
+            speechManager.speak(checkInText)
+
+            repository.insertLog(
+                type = LogType.SERVICE_EVENT,
+                title = "Proactive Check-In",
+                description = checkInText
+            )
+        }
+    }
+
+    fun checkWhoMessagedMe() {
+        sendCompanionMessage("Who messaged me recently?", speakOutput = true)
     }
 
     fun refreshPermissions() {
@@ -147,10 +292,13 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
     fun toggleMissedCallTts(enabled: Boolean) = preferences.setMissedCallTtsEnabled(enabled)
     fun toggleMissedCallSms(enabled: Boolean) = preferences.setMissedCallSmsEnabled(enabled)
     fun toggleNotificationReply(enabled: Boolean) = preferences.setNotificationReplyEnabled(enabled)
+    fun toggleAnnounceMessages(enabled: Boolean) = preferences.setAnnounceMessagesEnabled(enabled)
 
     fun updateSmsTemplate(template: String) = preferences.setSmsTemplate(template)
     fun updateNotificationTemplate(template: String) = preferences.setNotificationTemplate(template)
     fun updateWakeWord(word: String) = preferences.setWakeWord(word)
+    fun updateLearnedToneSamples(samples: String) = preferences.setLearnedToneSamples(samples)
+    fun addLearnedToneSample(sample: String) = preferences.addLearnedToneSample(sample)
 
     fun toggleMonitoredPackage(pkg: String, enabled: Boolean) =
         preferences.togglePackageMonitoring(pkg, enabled)
@@ -209,16 +357,27 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
                 sourcePackage = packageName
             )
 
-            // 2. Generate Smart AI Reply using Gemini API
+            // 2. Audible Who Messaged Me announcement
+            if (preferences.isAnnounceMessagesEnabledSync()) {
+                val cleanContent = if (incomingMessage.length > 80) incomingMessage.take(77) + "..." else incomingMessage
+                speechManager.speak("Babe, $senderName messaged you on $appName: $cleanContent")
+            }
+
+            // 3. Background Tone Training: Learn Roman Nepali and writing patterns
+            preferences.addLearnedToneSample(incomingMessage)
+
+            // 4. Generate Smart AI Reply using Gemini API
             val fallbackTemplate = preferences.getNotificationTemplateSync()
+            val learnedTone = preferences.getLearnedToneSamplesSync()
             val aiReply = geminiRepository.generateNotificationReply(
                 appName = appName,
                 senderName = senderName,
                 incomingMessage = incomingMessage,
-                defaultFallback = fallbackTemplate
+                defaultFallback = fallbackTemplate,
+                learnedTone = learnedTone
             )
 
-            // 3. Log simulated auto-reply dispatch
+            // 5. Log simulated auto-reply dispatch
             repository.insertLog(
                 type = LogType.AUTO_REPLY_SENT,
                 title = "AI Auto-Replied on $appName",
@@ -226,11 +385,8 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
                 sourcePackage = packageName
             )
 
-            // 4. Audio & TTS feedback
+            // 6. Audio & TTS feedback
             speechManager.playWakeConfirmationTone()
-            if (preferences.isMissedCallTtsEnabledSync()) {
-                speechManager.speak("AI auto replied to $senderName on $appName: $aiReply")
-            }
         }
     }
 

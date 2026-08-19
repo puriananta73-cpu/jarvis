@@ -37,9 +37,12 @@ jobs:
           cache-disabled: true
 
       - name: Prepare Debug Keystore, Services & Secrets
+        env:
+          INPUT_GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          touch .env
-          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+          API_KEY="${INPUT_GEMINI_KEY:-AIzaSyPlaceholderKeyForBuildingJarvisApp}"
+          echo "GEMINI_API_KEY=$API_KEY" > .env
+          echo "GEMINI_API_KEY=$API_KEY" > .env.example
           if [ -f "debug.keystore.base64" ]; then
             base64 -d debug.keystore.base64 > debug.keystore
           else

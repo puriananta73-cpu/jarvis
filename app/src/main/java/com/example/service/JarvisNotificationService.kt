@@ -135,13 +135,13 @@ class JarvisNotificationService : NotificationListenerService() {
             if (prefs.isAnnounceMessagesEnabledSync()) {
                 val speechManager = JarvisSpeechManager.getInstance(applicationContext)
                 val cleanContent = if (incomingContent.length > 80) incomingContent.take(77) + "..." else incomingContent
-                speechManager.speak("Babe, $title messaged you on $appLabel: $cleanContent")
+                speechManager.speak("$title messaged you on $appLabel: $cleanContent")
             }
 
             // 3. Background Tone Training: Learn Roman Nepali and texting patterns
             prefs.addLearnedToneSample(incomingContent)
 
-            // 4. Generate Smart AI Reply with Gemini API reading recent conversation context
+            // 4. Generate Smart AI Reply with Gemini API reading recent conversation context & memory
             val fallbackTemplate = prefs.getNotificationTemplateSync()
             val learnedTone = prefs.getLearnedToneSamplesSync()
             val priorLogs = repository.getRecentSenderLogs(title, limit = 5)
@@ -150,29 +150,52 @@ class JarvisNotificationService : NotificationListenerService() {
                 else "Me: ${log.description}"
             }.reversed()
 
-            val aiReply = geminiRepository.generateNotificationReply(
+            val memories = repository.getRecentMemories(20).map { it.factOrRule }
+
+            val result = geminiRepository.generateNotificationReplyWithAnalysis(
                 appName = appLabel,
                 senderName = title,
                 incomingMessage = incomingContent,
                 conversationHistory = conversationHistory,
                 defaultFallback = fallbackTemplate,
-                learnedTone = learnedTone
+                learnedTone = learnedTone,
+                userMemories = memories
             )
 
-            // 5. Extract RemoteInput and dispatch auto-reply
-            val replySuccess = executeAutoReply(notification, aiReply)
-
-            if (replySuccess) {
-                recentReplies[senderKey] = now
-                repository.insertLog(
-                    type = LogType.AUTO_REPLY_SENT,
-                    title = "AI Auto-Replied on $appLabel",
-                    description = "To: $title\nGenerated: \"$aiReply\"",
-                    sourcePackage = packageName
+            // If incoming message contains an unknown question needing user decision, escalate
+            if (result.needsUserClarification && result.extractedQuestion != null) {
+                repository.insertPendingQuestion(
+                    senderName = title,
+                    platform = appLabel,
+                    incomingMessage = incomingContent,
+                    extractedQuestion = result.extractedQuestion
                 )
+                JarvisSpeechManager.getInstance(applicationContext).speak("Babe, $title asked: \"${result.extractedQuestion}\". What should I tell them?")
+            } else {
+                // 5. Extract RemoteInput and dispatch auto-reply
+                val replySuccess = executeAutoReply(notification, result.replyText)
 
-                // Optional speech announcement
-                JarvisSpeechManager.getInstance(applicationContext).playWakeConfirmationTone()
+                if (replySuccess) {
+                    recentReplies[senderKey] = now
+                    repository.insertLog(
+                        type = LogType.AUTO_REPLY_SENT,
+                        title = "AI Auto-Replied on $appLabel",
+                        description = "To: $title\nGenerated: \"${result.replyText}\"",
+                        sourcePackage = packageName
+                    )
+
+                    // Optional confirmation tone
+                    JarvisSpeechManager.getInstance(applicationContext).playWakeConfirmationTone()
+                }
+            }
+
+            // Learn any new fact found in the conversation
+            if (!result.learnedMemoryFact.isNullOrBlank()) {
+                repository.insertMemory(
+                    category = com.example.data.model.MemoryCategory.PERSONAL_FACT,
+                    factOrRule = result.learnedMemoryFact,
+                    sourceContext = "Auto-Reply $appLabel from $title"
+                )
             }
         }
     }

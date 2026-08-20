@@ -3,6 +3,9 @@ package com.example.data.repository
 import com.example.data.db.JarvisDao
 import com.example.data.model.JarvisLog
 import com.example.data.model.LogType
+import com.example.data.model.MemoryCategory
+import com.example.data.model.PendingQuestion
+import com.example.data.model.UserMemory
 import com.example.data.preferences.JarvisPreferences
 import kotlinx.coroutines.flow.Flow
 
@@ -48,4 +51,56 @@ class JarvisRepository(
     suspend fun clearLogs() = dao.clearAllLogs()
 
     suspend fun deleteLog(id: Long) = dao.deleteLogById(id)
+
+    // --- User Memory & Learning Vault ---
+    fun getAllMemories(): Flow<List<UserMemory>> = dao.getAllMemories()
+
+    suspend fun getRecentMemories(limit: Int = 20): List<UserMemory> = dao.getRecentMemoriesSync(limit)
+
+    fun getMemoriesByCategory(category: MemoryCategory): Flow<List<UserMemory>> = dao.getMemoriesByCategory(category)
+
+    suspend fun insertMemory(
+        category: MemoryCategory,
+        factOrRule: String,
+        sourceContext: String = "Conversation",
+        confidence: Float = 1.0f
+    ): Long {
+        val memory = UserMemory(
+            category = category,
+            factOrRule = factOrRule,
+            sourceContext = sourceContext,
+            confidence = confidence,
+            timestamp = System.currentTimeMillis()
+        )
+        return dao.insertMemory(memory)
+    }
+
+    suspend fun deleteMemory(id: Long) = dao.deleteMemoryById(id)
+
+    suspend fun clearAllMemories() = dao.clearAllMemories()
+
+    // --- Pending Questions ---
+    fun getActivePendingQuestions(): Flow<List<PendingQuestion>> = dao.getActivePendingQuestions()
+
+    fun getAllQuestions(): Flow<List<PendingQuestion>> = dao.getAllQuestions()
+
+    suspend fun insertPendingQuestion(
+        senderName: String,
+        platform: String,
+        incomingMessage: String,
+        extractedQuestion: String
+    ): Long {
+        val question = PendingQuestion(
+            senderName = senderName,
+            platform = platform,
+            incomingMessage = incomingMessage,
+            extractedQuestion = extractedQuestion,
+            status = "PENDING"
+        )
+        return dao.insertQuestion(question)
+    }
+
+    suspend fun updateQuestion(question: PendingQuestion) = dao.updateQuestion(question)
+
+    suspend fun deleteQuestion(id: Long) = dao.deleteQuestionById(id)
 }

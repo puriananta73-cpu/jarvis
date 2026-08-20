@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -73,8 +74,9 @@ fun SettingsScreen(
     val isAnnounceMessages by viewModel.isAnnounceMessagesEnabled.collectAsState(initial = true)
     val learnedToneSamples by viewModel.learnedToneSamples.collectAsState(initial = "")
     val permissions by viewModel.permissions.collectAsState()
-    val ttsSpeedPref by viewModel.ttsSpeed.collectAsState(initial = 1.0f)
+    val ttsSpeedPref by viewModel.ttsSpeed.collectAsState(initial = 1.05f)
     val ttsPitchPref by viewModel.ttsPitch.collectAsState(initial = 1.0f)
+    val voiceStyle by viewModel.voiceStyle.collectAsState(initial = "GEMINI_NATURAL_FEMALE")
 
     var editableSmsTemplate by remember(smsTemplate) { mutableStateOf(smsTemplate) }
     var editableNotifTemplate by remember(notifTemplate) { mutableStateOf(notifTemplate) }
@@ -389,7 +391,51 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = "TTS Voice Speed: ${String.format("%.1fx", currentTtsSpeed)}",
+                        text = "Gemini Voice Profile",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = SlateTextMuted
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            "GEMINI_NATURAL_FEMALE" to "Gemini Female",
+                            "GEMINI_NATURAL_MALE" to "Gemini Male",
+                            "GEMINI_STUDIO" to "Studio Pro"
+                        ).forEach { (styleKey, styleLabel) ->
+                            val isSelected = voiceStyle == styleKey
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isSelected) PurpleAccent.copy(alpha = 0.25f) else ImmersiveItemBg)
+                                    .border(
+                                        1.dp,
+                                        if (isSelected) PurpleAccent else ImmersiveCardBorder,
+                                        RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable { viewModel.updateVoiceStyle(styleKey) }
+                                    .padding(vertical = 8.dp, horizontal = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = styleLabel,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) PurpleAccent else SlateTextDim,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = "TTS Voice Speed: ${String.format("%.2fx", currentTtsSpeed)}",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = SlateTextBright
@@ -400,8 +446,8 @@ fun SettingsScreen(
                             currentTtsSpeed = it
                             viewModel.updateTtsSettings(ttsPitchPref, it)
                         },
-                        valueRange = 0.5f..2.0f,
-                        steps = 15,
+                        valueRange = 0.7f..1.6f,
+                        steps = 9,
                         colors = SliderDefaults.colors(
                             thumbColor = CyanAccent,
                             activeTrackColor = CyanAccent,
@@ -411,7 +457,7 @@ fun SettingsScreen(
                     )
                     Button(
                         onClick = {
-                            viewModel.testTts("Babe, Jarvis voice is calibrated at ${String.format("%.1fx", currentTtsSpeed)} speed.")
+                            viewModel.testTts("Hello! Jarvis Gemini voice is calibrated and ready to assist you.")
                         },
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = CyanAccent.copy(alpha = 0.2f)),

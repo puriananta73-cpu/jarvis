@@ -30,14 +30,22 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PhoneMissed
+import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.JarvisLog
 import com.example.data.model.LogType
+import com.example.data.model.PendingQuestion
 import com.example.ui.JarvisViewModel
 import com.example.ui.components.StatusCard
 import com.example.ui.theme.AlertRed
@@ -89,12 +98,22 @@ fun DashboardScreen(
     isCallHandlerActive: Boolean,
     isNotificationActive: Boolean,
     isVoiceWakeActive: Boolean,
+    isLiveVoiceActive: Boolean,
+    liveVoiceTranscript: String,
+    liveVoiceStatus: String,
+    pendingQuestions: List<PendingQuestion>,
+    lastLearnedNotice: String?,
     recentLogs: List<JarvisLog>,
     companionMood: String,
     companionChat: List<JarvisViewModel.CompanionChatMessage>,
     isGeneratingCompanion: Boolean,
     onSendMessage: (String) -> Unit,
     onTriggerCheckIn: () -> Unit,
+    onStartLiveVoice: () -> Unit,
+    onStopLiveVoice: () -> Unit,
+    onAnswerPendingQuestion: (PendingQuestion, String) -> Unit,
+    onDismissPendingQuestion: (Long) -> Unit,
+    onClearLearnedNotice: () -> Unit,
     onToggleService: (Boolean) -> Unit,
     onToggleCallHandler: (Boolean) -> Unit,
     onToggleNotification: (Boolean) -> Unit,
@@ -120,17 +139,163 @@ fun DashboardScreen(
             .testTag("dashboard_screen"),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // --- Companion Orb & Emotional Header ---
+        // --- Companion Orb & Live Voice Header ---
         item {
             CompanionOrbHeader(
                 isServiceActive = isServiceActive,
-                isListening = isListening,
+                isListening = isListening || isLiveVoiceActive,
                 micLevel = micLevel,
                 companionMood = companionMood,
+                isLiveVoiceActive = isLiveVoiceActive,
+                onStartLiveVoice = onStartLiveVoice,
+                onStopLiveVoice = onStopLiveVoice,
                 onToggleService = onToggleService,
                 onTriggerCheckIn = onTriggerCheckIn,
                 modifier = Modifier.padding(top = 4.dp)
             )
+        }
+
+        // --- Active Gemini Live Bar (When Live Voice is Active) ---
+        if (isLiveVoiceActive) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(Color(0xFF0F2B48), Color(0xFF1E1B4B))
+                            )
+                        )
+                        .border(1.dp, CyanAccent, RoundedCornerShape(20.dp))
+                        .padding(14.dp)
+                        .testTag("gemini_live_banner")
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.GraphicEq,
+                                    contentDescription = null,
+                                    tint = CyanAccent,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = "GEMINI LIVE CONVERSATION",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = CyanAccent,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+
+                            Button(
+                                onClick = onStopLiveVoice,
+                                colors = ButtonDefaults.buttonColors(containerColor = AlertRed.copy(alpha = 0.2f)),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Icon(Icons.Default.Stop, contentDescription = "End Live", tint = AlertRed, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("End Live", color = AlertRed, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Text(
+                            text = if (liveVoiceTranscript.isNotBlank()) "\"$liveVoiceTranscript\"" else liveVoiceStatus,
+                            color = SlateTextBright,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+
+                        // Live audio wave indicator
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val barCount = 18
+                            repeat(barCount) { index ->
+                                val factor = ((index + 1) * 7 + micLevel.toInt() * 9) % 24 + 6
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(factor.dp)
+                                        .clip(RoundedCornerShape(3.dp))
+                                        .background(if (index % 2 == 0) CyanAccent else PurpleAccent)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- Learned Memory Notice Flash Card ---
+        if (lastLearnedNotice != null) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFF1E293B))
+                        .border(1.dp, AmberAccent.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                        .padding(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Lightbulb, contentDescription = null, tint = AmberAccent, modifier = Modifier.size(18.dp))
+                            Text(
+                                text = lastLearnedNotice,
+                                color = AmberAccent,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        IconButton(onClick = onClearLearnedNotice, modifier = Modifier.size(24.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = SlateTextDim, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- Pending Questions Escalation Card (Needs User Input) ---
+        if (pendingQuestions.isNotEmpty()) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "QUESTIONS NEEDING YOUR ANSWER",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = AmberAccent,
+                        letterSpacing = 1.sp
+                    )
+
+                    pendingQuestions.forEach { q ->
+                        PendingQuestionCard(
+                            question = q,
+                            onAnswer = { rawAnswer -> onAnswerPendingQuestion(q, rawAnswer) },
+                            onDismiss = { onDismissPendingQuestion(q.id) }
+                        )
+                    }
+                }
+            }
         }
 
         // --- Live Companion Voice & Chat Console ---
@@ -200,7 +365,7 @@ fun DashboardScreen(
                         }
                     }
 
-                    // Conversation Bubble List (Limited to 220dp height for smooth scroll)
+                    // Conversation Bubble List
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -231,7 +396,7 @@ fun DashboardScreen(
                                             strokeWidth = 2.dp
                                         )
                                         Text(
-                                            text = "Replying with love...",
+                                            text = "Thinking...",
                                             fontSize = 11.sp,
                                             fontStyle = FontStyle.Italic,
                                             color = SlateTextDim
@@ -242,7 +407,7 @@ fun DashboardScreen(
                         }
                     }
 
-                    // Quick Suggested Prompts
+                    // Quick Suggested Prompts (Roman Nepali, Background Search, App Opening)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -251,12 +416,13 @@ fun DashboardScreen(
                     ) {
                         val quickChips = listOf(
                             "Who messaged me? 📩",
-                            "K gardai xau? 💬",
-                            "Khana khayeu? 🍚",
-                            "How was your day? 💕",
-                            "Remind me to eat lunch 🍽️",
-                            "Tell Alex on WhatsApp: on my way",
-                            "Go to sleep 🌙"
+                            "Search latest Nepal news 🌐",
+                            "What is the weather today? ☀️",
+                            "K gardai xau?",
+                            "Khana khayeu?",
+                            "Open WhatsApp 💬",
+                            "Open Instagram 📸",
+                            "Suta aba 🌙"
                         )
                         quickChips.forEach { chip ->
                             Box(
@@ -285,7 +451,7 @@ fun DashboardScreen(
                         OutlinedTextField(
                             value = inputText,
                             onValueChange = { inputText = it },
-                            placeholder = { Text("Talk to your companion...", color = SlateTextDim, fontSize = 12.sp) },
+                            placeholder = { Text("Talk, search web, or open apps...", color = SlateTextDim, fontSize = 12.sp) },
                             modifier = Modifier
                                 .weight(1f)
                                 .height(50.dp)
@@ -429,7 +595,7 @@ fun DashboardScreen(
                             )
 
                             Text(
-                                text = "Simulate events",
+                                text = "Simulate & Train AI",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = CyanAccent
@@ -453,7 +619,7 @@ fun DashboardScreen(
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -461,7 +627,7 @@ fun DashboardScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "RECENT ACTIVITY",
+                            text = "LIVE ACTIVITY FEED",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = SlateTextDim,
@@ -470,13 +636,10 @@ fun DashboardScreen(
 
                         Text(
                             text = "View All",
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = CyanAccent,
-                            modifier = Modifier
-                                .clickable { onNavigateToLogs() }
-                                .padding(4.dp)
-                                .testTag("view_all_logs_button")
+                            modifier = Modifier.clickable { onNavigateToLogs() }
                         )
                     }
 
@@ -504,6 +667,92 @@ fun DashboardScreen(
 
         item {
             Spacer(modifier = Modifier.height(20.dp))
+        }
+    }
+}
+
+@Composable
+fun PendingQuestionCard(
+    question: PendingQuestion,
+    onAnswer: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var rawAnswerInput by remember { mutableStateOf("") }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color(0xFF1E2433))
+            .border(1.dp, AmberAccent, RoundedCornerShape(18.dp))
+            .padding(14.dp)
+            .testTag("pending_question_${question.id}")
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(Icons.Default.QuestionAnswer, contentDescription = null, tint = AmberAccent, modifier = Modifier.size(16.dp))
+                    Text(
+                        text = "From ${question.senderName} on ${question.platform}",
+                        fontWeight = FontWeight.Bold,
+                        color = AmberAccent,
+                        fontSize = 12.sp
+                    )
+                }
+                IconButton(onClick = onDismiss, modifier = Modifier.size(20.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = SlateTextDim, modifier = Modifier.size(14.dp))
+                }
+            }
+
+            Text(
+                text = "\"${question.extractedQuestion}\"",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = SlateTextBright
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = rawAnswerInput,
+                    onValueChange = { rawAnswerInput = it },
+                    placeholder = { Text("What should I reply? (e.g. '7pm at home')", color = SlateTextDim, fontSize = 11.sp) },
+                    modifier = Modifier.weight(1f).height(46.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CyanAccent,
+                        unfocusedBorderColor = ImmersiveCardBorder,
+                        focusedTextColor = SlateTextBright,
+                        unfocusedTextColor = SlateTextBright,
+                        focusedContainerColor = ImmersiveItemBg,
+                        unfocusedContainerColor = ImmersiveItemBg
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    singleLine = true
+                )
+
+                Button(
+                    onClick = {
+                        if (rawAnswerInput.isNotBlank()) {
+                            onAnswer(rawAnswerInput)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CyanAccent),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.height(46.dp)
+                ) {
+                    Text("Reply as Me", color = ImmersiveBg, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                }
+            }
         }
     }
 }
@@ -557,6 +806,25 @@ fun CompanionChatBubble(msg: JarvisViewModel.CompanionChatMessage) {
                 )
             }
         }
+
+        // Display learned memory insight badge if AI learned something
+        if (msg.learnedInsight != null) {
+            Box(
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(AmberAccent.copy(alpha = 0.15f))
+                    .border(1.dp, AmberAccent.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = msg.learnedInsight,
+                    fontSize = 10.sp,
+                    color = AmberAccent,
+                    fontStyle = FontStyle.Italic
+                )
+            }
+        }
     }
 }
 
@@ -566,6 +834,9 @@ fun CompanionOrbHeader(
     isListening: Boolean,
     micLevel: Float,
     companionMood: String,
+    isLiveVoiceActive: Boolean,
+    onStartLiveVoice: () -> Unit,
+    onStopLiveVoice: () -> Unit,
     onToggleService: (Boolean) -> Unit,
     onTriggerCheckIn: () -> Unit,
     modifier: Modifier = Modifier
@@ -573,9 +844,9 @@ fun CompanionOrbHeader(
     val infiniteTransition = rememberInfiniteTransition(label = "orb_pulse")
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 0.95f,
-        targetValue = 1.05f,
+        targetValue = 1.08f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = FastOutSlowInEasing),
+            animation = tween(1500, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulse_scale"
@@ -593,7 +864,7 @@ fun CompanionOrbHeader(
                     )
                 )
             )
-            .border(1.dp, CyanAccent.copy(alpha = 0.3f), RoundedCornerShape(26.dp))
+            .border(1.dp, if (isLiveVoiceActive) CyanAccent else CyanAccent.copy(alpha = 0.3f), RoundedCornerShape(26.dp))
             .padding(18.dp)
     ) {
         Row(
@@ -601,22 +872,24 @@ fun CompanionOrbHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Left: Glowing Animated Companion Orb
+            // Left: Glowing Animated Companion Orb (Click to toggle Gemini Live voice)
             Box(
                 modifier = Modifier
                     .size(72.dp)
-                    .scale(if (isListening) pulseScale else 1f)
+                    .scale(if (isListening || isLiveVoiceActive) pulseScale else 1f)
                     .clip(CircleShape)
                     .background(
                         Brush.radialGradient(
                             listOf(
-                                CyanAccent.copy(alpha = 0.8f),
+                                if (isLiveVoiceActive) CyanAccent else CyanAccent.copy(alpha = 0.8f),
                                 PurpleAccent.copy(alpha = 0.4f),
                                 Color.Transparent
                             )
                         )
                     )
-                    .clickable { onToggleService(!isServiceActive) },
+                    .clickable {
+                        if (isLiveVoiceActive) onStopLiveVoice() else onStartLiveVoice()
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Box(
@@ -624,13 +897,13 @@ fun CompanionOrbHeader(
                         .size(44.dp)
                         .clip(CircleShape)
                         .background(Color(0xFF0F172A))
-                        .border(2.dp, CyanAccent, CircleShape),
+                        .border(2.dp, if (isLiveVoiceActive) CyanAccent else PurpleAccent, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Favorite,
-                        contentDescription = "Companion Heart",
-                        tint = if (isServiceActive) Color(0xFFFF4081) else SlateTextDim,
+                        imageVector = if (isLiveVoiceActive) Icons.Default.GraphicEq else Icons.Default.Favorite,
+                        contentDescription = "Live Voice / Companion",
+                        tint = if (isLiveVoiceActive) CyanAccent else Color(0xFFFF4081),
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -652,96 +925,111 @@ fun CompanionOrbHeader(
                 )
 
                 Text(
-                    text = companionMood,
+                    text = if (isLiveVoiceActive) "Gemini Live Active • Listening..." else companionMood,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = CyanAccent
+                    color = if (isLiveVoiceActive) CyanAccent else Color(0xFFFF80AB),
+                    fontWeight = FontWeight.Medium
                 )
 
-                Text(
-                    text = if (isListening) "Listening for 'Hey Jarvis' / 'Go to sleep'" else "Standby (Tap heart to wake)",
-                    fontSize = 10.sp,
-                    color = SlateTextDim
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isLiveVoiceActive) CyanAccent else PurpleAccent.copy(alpha = 0.2f))
+                            .clickable {
+                                if (isLiveVoiceActive) onStopLiveVoice() else onStartLiveVoice()
+                            }
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = if (isLiveVoiceActive) "🔴 Live Voice (On)" else "🎙️ Start Gemini Live",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isLiveVoiceActive) ImmersiveBg else CyanAccent
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isServiceActive) EmeraldGreen.copy(alpha = 0.2f) else AlertRed.copy(alpha = 0.2f))
+                            .clickable { onToggleService(!isServiceActive) }
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = if (isServiceActive) "Online" else "Standby",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isServiceActive) EmeraldGreen else AlertRed
+                        )
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-fun RecentLogItemMini(
-    log: JarvisLog,
-    modifier: Modifier = Modifier
-) {
-    val (icon, tintColor) = when (log.type) {
-        LogType.CALL_MISSED -> Pair(Icons.Default.PhoneMissed, AlertRed)
-        LogType.CALL_INCOMING -> Pair(Icons.Default.Call, CyanAccent)
-        LogType.SMS_AUTO_SENT -> Pair(Icons.Default.Send, CyanAccent)
-        LogType.AUTO_REPLY_SENT -> Pair(Icons.Default.Chat, EmeraldGreen)
-        LogType.NOTIFICATION_RECEIVED -> Pair(Icons.Default.Notifications, PurpleAccent)
-        LogType.WAKE_WORD_DETECTED -> Pair(Icons.Default.Mic, AmberAccent)
-        LogType.SERVICE_EVENT -> Pair(Icons.Default.Notifications, CyanAccent)
+fun RecentLogItemMini(log: JarvisLog) {
+    val (icon, color) = when (log.type) {
+        LogType.CALL_MISSED, LogType.CALL_INCOMING -> Icons.Default.PhoneMissed to AlertRed
+        LogType.AUTO_REPLY_SENT, LogType.SMS_AUTO_SENT -> Icons.Default.Send to CyanAccent
+        LogType.NOTIFICATION_RECEIVED -> Icons.Default.Notifications to PurpleAccent
+        LogType.WAKE_WORD_DETECTED -> Icons.Default.Mic to EmeraldGreen
+        LogType.SERVICE_EVENT -> Icons.Default.VolumeUp to AmberAccent
     }
 
     val timeFormatted = remember(log.timestamp) {
-        val diff = System.currentTimeMillis() - log.timestamp
-        when {
-            diff < 60_000 -> "Just now"
-            diff < 3600_000 -> "${diff / 60_000}m ago"
-            diff < 86400_000 -> "${diff / 3600_000}h ago"
-            else -> SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(log.timestamp))
-        }
+        val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
+        sdf.format(Date(log.timestamp))
     }
 
-    Box(
-        modifier = modifier
+    Row(
+        modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(ImmersiveItemBg)
-            .padding(10.dp)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        Box(
+            modifier = Modifier
+                .size(30.dp)
+                .clip(CircleShape)
+                .background(color.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF1E293B)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = tintColor,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = log.title,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = SlateTextBright,
-                    maxLines = 1
-                )
-                Text(
-                    text = log.description,
-                    fontSize = 10.sp,
-                    fontStyle = FontStyle.Italic,
-                    color = SlateTextMuted,
-                    maxLines = 1
-                )
-            }
-
-            Text(
-                text = timeFormatted,
-                fontSize = 9.sp,
-                color = SlateTextDim
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(16.dp)
             )
         }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = log.title,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = SlateTextBright
+            )
+            Text(
+                text = log.description,
+                fontSize = 11.sp,
+                color = SlateTextDim,
+                maxLines = 1
+            )
+        }
+
+        Text(
+            text = timeFormatted,
+            fontSize = 10.sp,
+            color = SlateTextMuted
+        )
     }
 }

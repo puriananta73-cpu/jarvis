@@ -61,6 +61,8 @@ class JarvisSpeechManager private constructor(private val context: Context) : Re
     private var onWakeWordDetectedListener: ((String) -> Unit)? = null
     private var onSleepWordDetectedListener: ((String) -> Unit)? = null
     private var onQueryMessagesListener: ((String) -> Unit)? = null
+    private var onLiveVoiceUtteranceListener: ((String) -> Unit)? = null
+    private var isLiveVoiceSessionActive = false
 
     fun setOnSleepWordDetectedListener(listener: (String) -> Unit) {
         this.onSleepWordDetectedListener = listener
@@ -68,6 +70,17 @@ class JarvisSpeechManager private constructor(private val context: Context) : Re
 
     fun setOnQueryMessagesListener(listener: (String) -> Unit) {
         this.onQueryMessagesListener = listener
+    }
+
+    fun setOnLiveVoiceUtteranceListener(listener: ((String) -> Unit)?) {
+        this.onLiveVoiceUtteranceListener = listener
+    }
+
+    fun setLiveVoiceSessionActive(active: Boolean) {
+        this.isLiveVoiceSessionActive = active
+        if (active) {
+            startWakeWordListening()
+        }
     }
 
     init {
@@ -89,7 +102,7 @@ class JarvisSpeechManager private constructor(private val context: Context) : Re
                 }
                 isTtsReady = true
                 applyTtsPreferences()
-                Log.d(TAG, "TextToSpeech initialized successfully")
+                Log.d(TAG, "TextToSpeech initialized successfully with Gemini voice calibration")
             } else {
                 Log.e(TAG, "TextToSpeech initialization failed with status: $status")
             }
@@ -113,8 +126,74 @@ class JarvisSpeechManager private constructor(private val context: Context) : Re
     fun applyTtsPreferences() {
         if (!isTtsReady) return
         val prefs = (context as? JarvisApplication)?.preferences ?: JarvisApplication.instance.preferences
-        tts?.setPitch(prefs.getTtsPitchSync())
-        tts?.setSpeechRate(prefs.getTtsSpeedSync())
+        val voiceStyle = prefs.getVoiceStyleSync()
+        val customPitch = prefs.getTtsPitchSync()
+        val customSpeed = prefs.getTtsSpeedSync()
+
+        // Calibrate pitch and speed based on Gemini Voice Profile
+        when (voiceStyle) {
+            "GEMINI_NATURAL_MALE" -> {
+                tts?.setPitch(0.92f * customPitch)
+                tts?.setSpeechRate(1.02f * customSpeed)
+            }
+            "GEMINI_STUDIO" -> {
+                tts?.setPitch(1.0f * customPitch)
+                tts?.setSpeechRate(1.08f * customSpeed)
+            }
+            else -> { // GEMINI_NATURAL_FEMALE / Default
+                tts?.setPitch(1.02f * customPitch)
+                tts?.setSpeechRate(1.05f * customSpeed)
+            }
+        }
+
+        // Try to pick the best high-quality matching TTS voice from available engine voices
+        try {
+            val voices = tts?.voices
+            if (!voices.isNullOrEmpty()) {
+                val targetVoice = when (voiceStyle) {
+                    "GEMINI_NATURAL_MALE" -> {
+                        voices.find { v ->
+                            v.locale.language == "en" &&
+                                    (v.name.contains("male", ignoreCase = true) || v.name.contains("#male", ignoreCase = true) || v.name.contains("en-us-x-tpd", ignoreCase = true))
+                        }
+                    }
+                    "GEMINI_STUDIO" -> {
+                        voices.find { v ->
+                            v.locale.language == "en" &&
+                                    (v.name.contains("neural", ignoreCase = true) || v.name.contains("network", ignoreCase = true) || v.name.contains("studio", ignoreCase = true))
+                        }
+                    }
+                    else -> {
+                        voices.find { v ->
+                            v.locale.language == "en" &&
+                                    (v.name.contains("female", ignoreCase = true) || v.name.contains("#female", ignoreCase = true) || v.name.contains("en-us-x-sfg", ignoreCase = true))
+                        }
+                    }
+                } ?: voices.find { it.locale.language == "en" && !it.isNetworkConnectionRequired }
+                ?: voices.find { it.locale.language == "en" }
+
+                if (targetVoice != null) {
+                    tts?.voice = targetVoice
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Voice calibration fallback: ${e.message}")
+        }
+    }
+
+    /**
+     * Cleans raw AI text by removing markdown formatting, bullet asterisks,
+     * json brackets, and emojis so TTS speech flows naturally without annoying artifacts.
+     */
+    private fun cleanTextForSpeech(raw: String): String {
+        return raw
+            .replace(Regex("(?i)```[a-z]*"), "")
+            .replace("```", "")
+            .replace(Regex("[#*`_~>\\[\\]()]+"), " ")
+            .replace(Regex("(?i)json"), "")
+            .replace(Regex("[\\p{So}\\p{Cn}]"), "") // remove miscellaneous symbols / emojis
+            .replace(Regex("\\s+"), " ")
+            .trim()
     }
 
     /**
@@ -122,13 +201,16 @@ class JarvisSpeechManager private constructor(private val context: Context) : Re
      */
     fun speak(text: String, flush: Boolean = true, utteranceId: String = "jarvis_announcement_${System.currentTimeMillis()}") {
         if (!isTtsReady) {
-            Log.w(TAG, "TTS not ready yet. Retrying in 500ms...")
-            mainHandler.postDelayed({ speak(text, flush, utteranceId) }, 500)
+            Log.w(TAG, "TTS not ready yet. Retrying in 400ms...")
+            mainHandler.postDelayed({ speak(text, flush, utteranceId) }, 400)
             return
         }
+        val cleanSpeechText = cleanTextForSpeech(text)
+        if (cleanSpeechText.isBlank()) return
+
         applyTtsPreferences()
         val queueMode = if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
-        tts?.speak(text, queueMode, null, utteranceId)
+        tts?.speak(cleanSpeechText, queueMode, null, utteranceId)
     }
 
     /**
@@ -309,6 +391,14 @@ class JarvisSpeechManager private constructor(private val context: Context) : Re
     }
 
     private fun checkWakeWord(text: String): Boolean {
+        if (text.isBlank()) return false
+
+        // If Live Gemini Voice Mode is running, route everything straight to the live conversation engine
+        if (isLiveVoiceSessionActive) {
+            onLiveVoiceUtteranceListener?.invoke(text)
+            return true
+        }
+
         val prefs = JarvisApplication.instance.preferences
         val targetWakeWord = prefs.getWakeWordSync().lowercase()
         val normalizedText = text.lowercase()
@@ -339,16 +429,12 @@ class JarvisSpeechManager private constructor(private val context: Context) : Re
             return true
         }
 
-        // 3. Check for companion wake word triggers
+        // 3. Check for companion wake word triggers (Respects custom configured wake word)
         if (normalizedText.contains(targetWakeWord) || 
             normalizedText.contains("jarvis") || 
             normalizedText.contains("hey jarvis") || 
-            normalizedText.contains("babe") || 
-            normalizedText.contains("hey babe") || 
-            normalizedText.contains("honey") || 
-            normalizedText.contains("my love") ||
             normalizedText.contains("sunana") ||
-            normalizedText.contains("maya")) {
+            normalizedText.contains("gemini")) {
             playWakeConfirmationTone()
             onWakeWordDetectedListener?.invoke(text)
             return true

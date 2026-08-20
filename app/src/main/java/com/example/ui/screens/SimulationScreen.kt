@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhoneMissed
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.QuestionAnswer
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -48,6 +49,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.MemoryCategory
 import com.example.ui.JarvisViewModel
 import com.example.ui.theme.AlertRed
 import com.example.ui.theme.AmberAccent
@@ -83,8 +85,11 @@ fun SimulationScreen(
     var senderName by remember { mutableStateOf("Alex Mercer") }
     var incomingMessage by remember { mutableStateOf("Hey! Are you free for the project sync call right now?") }
 
+    var trainingPrompt by remember { mutableStateOf("") }
+
     val smsTemplate by viewModel.smsTemplate.collectAsState(initial = "")
     val notifTemplate by viewModel.notificationTemplate.collectAsState(initial = "")
+    val memories by viewModel.userMemories.collectAsState()
 
     LazyColumn(
         modifier = modifier
@@ -122,16 +127,128 @@ fun SimulationScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "Interactive AI Test Studio",
+                            text = "AI Test Studio & Training Sandbox",
                             fontWeight = FontWeight.Bold,
                             color = SlateTextBright,
                             fontSize = 16.sp
                         )
                         Text(
-                            text = "Powered by Gemini 2.5 Flash contextual auto-responses",
+                            text = "Train AI on how you sound, test WhatsApp / Instagram auto-replies & missed calls",
                             color = CyanAccent,
                             fontSize = 12.sp
                         )
+                    }
+                }
+            }
+        }
+
+        // --- Interactive AI Training Sandbox ---
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(ImmersiveCard.copy(alpha = 0.85f))
+                    .border(1.dp, PurpleAccent.copy(alpha = 0.4f), RoundedCornerShape(22.dp))
+                    .padding(16.dp)
+                    .testTag("training_sandbox_card")
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(PurpleAccent.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = PurpleAccent, modifier = Modifier.size(18.dp))
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "AI Personality Training Sandbox",
+                                fontWeight = FontWeight.Bold,
+                                color = SlateTextBright,
+                                fontSize = 14.sp
+                            )
+                        }
+
+                        Text(
+                            text = "${memories.size} Learned Facts",
+                            color = AmberAccent,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Text(
+                        text = "Talk or type to the AI to feed it personal facts, favorite spots, slang, or daily habits. It automatically extracts and stores facts in the Memory Vault.",
+                        fontSize = 12.sp,
+                        color = SlateTextMuted
+                    )
+
+                    OutlinedTextField(
+                        value = trainingPrompt,
+                        onValueChange = { trainingPrompt = it },
+                        label = { Text("Teach or chat with AI...", color = SlateTextMuted) },
+                        placeholder = { Text("E.g. 'I usually wake up at 7am and live in Kathmandu' or 'When friends ask to hang out, I usually say 'hunxa bro''", color = SlateTextDim, fontSize = 12.sp) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("sandbox_training_input"),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = ImmersiveItemBg,
+                            unfocusedContainerColor = ImmersiveItemBg,
+                            focusedBorderColor = PurpleAccent,
+                            unfocusedBorderColor = ImmersiveCardBorder,
+                            focusedTextColor = SlateTextBright,
+                            unfocusedTextColor = SlateTextBright
+                        ),
+                        minLines = 2
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                if (trainingPrompt.isNotBlank()) {
+                                    val text = trainingPrompt
+                                    trainingPrompt = ""
+                                    viewModel.sendCompanionMessage(text, speakOutput = true)
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = PurpleAccent),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("sandbox_train_button")
+                        ) {
+                            Icon(Icons.Default.Chat, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Chat & Learn", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = {
+                                if (trainingPrompt.isNotBlank()) {
+                                    val text = trainingPrompt
+                                    trainingPrompt = ""
+                                    viewModel.addManualMemory(MemoryCategory.PERSONAL_FACT, text)
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = CyanAccent),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Direct Save Memory", color = ImmersiveBg, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -262,7 +379,7 @@ fun SimulationScreen(
             }
         }
 
-        // Test 2: Instagram / Messaging Auto-Reply with Gemini
+        // Test 2: Instagram / WhatsApp Auto-Reply with Context & Questions
         item {
             Box(
                 modifier = Modifier
@@ -291,7 +408,7 @@ fun SimulationScreen(
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "2. Instagram / DM Auto-Reply (Gemini AI)",
+                            text = "2. WhatsApp / Instagram DM Auto-Reply",
                             fontWeight = FontWeight.Bold,
                             color = SlateTextBright,
                             fontSize = 14.sp
@@ -299,7 +416,7 @@ fun SimulationScreen(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Intercepts DM notifications and uses Gemini 2.5 Flash to synthesize a smart inline reply.",
+                        text = "Tests Roman Nepali & English auto-replies matching the user's personality without robotic excuses.",
                         fontSize = 12.sp,
                         color = SlateTextMuted
                     )
@@ -335,8 +452,8 @@ fun SimulationScreen(
                             onDismissRequest = { isAppDropdownExpanded = false }
                         ) {
                             appOptions.forEachIndexed { index, pair ->
-                                DropdownMenuItem(
-                                    text = { Text("${pair.first} (${pair.second})") },
+                                DropMenuItem(
+                                    label = "${pair.first} (${pair.second})",
                                     onClick = {
                                         selectedAppIndex = index
                                         isAppDropdownExpanded = false
@@ -350,7 +467,7 @@ fun SimulationScreen(
                     OutlinedTextField(
                         value = senderName,
                         onValueChange = { senderName = it },
-                        label = { Text("Sender Username / Handle", color = SlateTextMuted) },
+                        label = { Text("Sender Username / Contact", color = SlateTextMuted) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("sim_sender_name_input"),
@@ -368,7 +485,7 @@ fun SimulationScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Quick Presets (Roman Nepali & English):",
+                        text = "Quick Presets (Roman Nepali, English, Specific Questions):",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = SlateTextMuted
@@ -382,6 +499,7 @@ fun SimulationScreen(
                         listOf(
                             "k gardai xau? call gara na" to "Aayush",
                             "khana khayeu? vetne ho?" to "Pooja",
+                            "What time are you coming?" to "Suman",
                             "Hey! Sync call now?" to "Alex"
                         ).forEach { (msg, sender) ->
                             Box(
@@ -463,7 +581,7 @@ fun SimulationScreen(
             }
         }
 
-        // Test 3: Voice Wake-Word Activation
+        // Test 3: Voice Wake-Word Activation & TTS
         item {
             Box(
                 modifier = Modifier
@@ -492,7 +610,7 @@ fun SimulationScreen(
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "3. Voice Wake-Word (\"Hey Jarvis\")",
+                            text = "3. Voice Wake-Word (\"Hey Jarvis / Babe\")",
                             fontWeight = FontWeight.Bold,
                             color = SlateTextBright,
                             fontSize = 14.sp
@@ -500,7 +618,7 @@ fun SimulationScreen(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Plays arc-reactor confirmation audio tone + audible TTS greeting response.",
+                        text = "Plays confirmation audio tone + audible TTS greeting response.",
                         fontSize = 12.sp,
                         color = SlateTextMuted
                     )
@@ -522,7 +640,7 @@ fun SimulationScreen(
                         }
 
                         Button(
-                            onClick = { viewModel.testTts("Hello! I am Jarvis, your hands-free background assistant.") },
+                            onClick = { viewModel.testTts("Hello! I am Jarvis, your hands-free companion.") },
                             colors = ButtonDefaults.buttonColors(containerColor = CyanAccent),
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier
@@ -542,4 +660,12 @@ fun SimulationScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
+}
+
+@Composable
+private fun DropMenuItem(label: String, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(label, color = SlateTextBright) },
+        onClick = onClick
+    )
 }

@@ -31,6 +31,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.PlayCircleOutline
@@ -55,7 +57,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.JarvisViewModel
 import com.example.ui.screens.ActivityLogScreen
+import com.example.ui.screens.ChatScreen
 import com.example.ui.screens.DashboardScreen
+import com.example.ui.screens.MemoryVaultScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.SimulationScreen
 import com.example.ui.theme.CyanAccent
@@ -66,7 +70,9 @@ import com.example.ui.theme.SlateTextDim
 
 enum class Screen(val label: String, val icon: ImageVector) {
     DASHBOARD("Overview", Icons.Default.Dashboard),
-    SIMULATION("Test Studio", Icons.Default.PlayCircleOutline),
+    CHAT("Gemini Chat", Icons.Default.ChatBubbleOutline),
+    SIMULATION("AI Sandbox", Icons.Default.PlayCircleOutline),
+    MEMORIES("Memory Vault", Icons.Default.AutoAwesome),
     LOGS("Activity", Icons.Default.ListAlt),
     SETTINGS("Settings", Icons.Default.Settings)
 }
@@ -94,6 +100,12 @@ class MainActivity : ComponentActivity() {
                 val isNotificationActive by viewModel.isNotificationReplyEnabled.collectAsState(initial = true)
                 val isVoiceWakeActive by viewModel.isVoiceWakeEnabled.collectAsState(initial = true)
                 val activityLogs by viewModel.logs.collectAsState()
+
+                val isLiveVoiceActive by viewModel.isLiveVoiceActive.collectAsState()
+                val liveVoiceTranscript by viewModel.liveVoiceTranscript.collectAsState()
+                val liveVoiceStatus by viewModel.liveVoiceStatus.collectAsState()
+                val pendingQuestions by viewModel.activePendingQuestions.collectAsState()
+                val lastLearnedNotice by viewModel.lastLearnedMemoryNotice.collectAsState()
 
                 var currentScreen by remember { mutableStateOf(Screen.DASHBOARD) }
 
@@ -136,12 +148,22 @@ class MainActivity : ComponentActivity() {
                                     isCallHandlerActive = isCallHandlerActive,
                                     isNotificationActive = isNotificationActive,
                                     isVoiceWakeActive = isVoiceWakeActive,
+                                    isLiveVoiceActive = isLiveVoiceActive,
+                                    liveVoiceTranscript = liveVoiceTranscript,
+                                    liveVoiceStatus = liveVoiceStatus,
+                                    pendingQuestions = pendingQuestions,
+                                    lastLearnedNotice = lastLearnedNotice,
                                     recentLogs = activityLogs,
                                     companionMood = companionMood,
                                     companionChat = companionChat,
                                     isGeneratingCompanion = isGeneratingCompanion,
                                     onSendMessage = { viewModel.sendCompanionMessage(it) },
                                     onTriggerCheckIn = { viewModel.triggerProactiveCheckIn() },
+                                    onStartLiveVoice = { viewModel.startLiveVoiceMode() },
+                                    onStopLiveVoice = { viewModel.stopLiveVoiceMode() },
+                                    onAnswerPendingQuestion = { q, ans -> viewModel.respondToPendingQuestion(q, ans) },
+                                    onDismissPendingQuestion = { qId -> viewModel.dismissPendingQuestion(qId) },
+                                    onClearLearnedNotice = { viewModel.clearMemoryNotice() },
                                     onToggleService = { viewModel.toggleMasterService(it) },
                                     onToggleCallHandler = { viewModel.toggleMissedCallSms(it) },
                                     onToggleNotification = { viewModel.toggleNotificationReply(it) },
@@ -149,7 +171,13 @@ class MainActivity : ComponentActivity() {
                                     onNavigateToLogs = { currentScreen = Screen.LOGS },
                                     onNavigateToSimulation = { currentScreen = Screen.SIMULATION }
                                 )
+                                Screen.CHAT -> ChatScreen(
+                                    viewModel = viewModel
+                                )
                                 Screen.SIMULATION -> SimulationScreen(
+                                    viewModel = viewModel
+                                )
+                                Screen.MEMORIES -> MemoryVaultScreen(
                                     viewModel = viewModel
                                 )
                                 Screen.LOGS -> ActivityLogScreen(
@@ -214,7 +242,7 @@ fun ImmersiveBottomNavBar(
                 color = ImmersiveCardBorder.copy(alpha = 0.5f)
             )
             .background(ImmersiveBg)
-            .padding(vertical = 10.dp)
+            .padding(vertical = 8.dp)
             .testTag("immersive_bottom_nav")
     ) {
         Row(
@@ -227,10 +255,10 @@ fun ImmersiveBottomNavBar(
                 Column(
                     modifier = Modifier
                         .clickable { onScreenSelected(screen) }
-                        .padding(horizontal = 14.dp, vertical = 4.dp)
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                         .testTag("nav_item_${screen.name.lowercase()}"),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
                     if (isSelected) {
                         Box(
@@ -247,12 +275,12 @@ fun ImmersiveBottomNavBar(
                         imageVector = screen.icon,
                         contentDescription = screen.label,
                         tint = if (isSelected) CyanAccent else SlateTextDim,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(20.dp)
                     )
 
                     Text(
                         text = screen.label,
-                        fontSize = 10.sp,
+                        fontSize = 9.5.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                         color = if (isSelected) CyanAccent else SlateTextDim
                     )

@@ -6,8 +6,14 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.example.data.model.JarvisLog
+import com.example.data.model.PendingQuestion
+import com.example.data.model.UserMemory
 
-@Database(entities = [JarvisLog::class], version = 1, exportSchema = false)
+@Database(
+    entities = [JarvisLog::class, UserMemory::class, PendingQuestion::class],
+    version = 2,
+    exportSchema = false
+)
 abstract class JarvisDatabase : RoomDatabase() {
     abstract fun jarvisDao(): JarvisDao
 

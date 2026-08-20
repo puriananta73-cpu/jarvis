@@ -21,6 +21,7 @@ class JarvisPreferences(context: Context) {
         const val KEY_MONITORED_PACKAGES = "key_monitored_packages"
         const val KEY_TTS_PITCH = "key_tts_pitch"
         const val KEY_TTS_SPEED = "key_tts_speed"
+        const val KEY_TTS_VOICE_STYLE = "key_tts_voice_style"
         const val KEY_WAKE_WORD = "key_wake_word"
         const val KEY_ANNOUNCE_MESSAGES = "key_announce_incoming_messages"
         const val KEY_LEARNED_TONE_SAMPLES = "key_learned_tone_samples"
@@ -30,6 +31,7 @@ class JarvisPreferences(context: Context) {
         const val DEFAULT_NOTIF_TEMPLATE =
             "thik xa hai, timi sunau!"
         const val DEFAULT_WAKE_WORD = "jarvis"
+        const val DEFAULT_VOICE_STYLE = "GEMINI_NATURAL_FEMALE"
         const val DEFAULT_PACKAGES = "com.instagram.android,com.whatsapp,com.facebook.orca,org.telegram.messenger"
         const val DEFAULT_TONE_SAMPLES = "k gardai xau? | aaja vetne ho? | thik xa hai | paxi kura garumla | ma aaudai xu | khana khayeu?"
     }
@@ -66,6 +68,9 @@ class JarvisPreferences(context: Context) {
     private val _wakeWord = MutableStateFlow(prefs.getString(KEY_WAKE_WORD, DEFAULT_WAKE_WORD) ?: DEFAULT_WAKE_WORD)
     val wakeWord: StateFlow<String> = _wakeWord.asStateFlow()
 
+    private val _voiceStyle = MutableStateFlow(prefs.getString(KEY_TTS_VOICE_STYLE, DEFAULT_VOICE_STYLE) ?: DEFAULT_VOICE_STYLE)
+    val voiceStyle: StateFlow<String> = _voiceStyle.asStateFlow()
+
     private val _monitoredPackages = MutableStateFlow(
         prefs.getString(KEY_MONITORED_PACKAGES, DEFAULT_PACKAGES)?.split(",")?.toSet() ?: setOf("com.instagram.android")
     )
@@ -74,7 +79,7 @@ class JarvisPreferences(context: Context) {
     private val _ttsPitch = MutableStateFlow(prefs.getFloat(KEY_TTS_PITCH, 1.0f))
     val ttsPitch: StateFlow<Float> = _ttsPitch.asStateFlow()
 
-    private val _ttsSpeed = MutableStateFlow(prefs.getFloat(KEY_TTS_SPEED, 1.0f))
+    private val _ttsSpeed = MutableStateFlow(prefs.getFloat(KEY_TTS_SPEED, 1.05f))
     val ttsSpeed: StateFlow<Float> = _ttsSpeed.asStateFlow()
 
     fun setServiceEnabled(enabled: Boolean) {
@@ -116,6 +121,11 @@ class JarvisPreferences(context: Context) {
         val clean = word.trim().lowercase()
         prefs.edit().putString(KEY_WAKE_WORD, clean).apply()
         _wakeWord.value = clean
+    }
+
+    fun setVoiceStyle(style: String) {
+        prefs.edit().putString(KEY_TTS_VOICE_STYLE, style).apply()
+        _voiceStyle.value = style
     }
 
     fun setMonitoredPackages(packages: Set<String>) {
@@ -171,8 +181,9 @@ class JarvisPreferences(context: Context) {
     fun getSmsTemplateSync(): String = prefs.getString(KEY_SMS_TEMPLATE, DEFAULT_SMS_TEMPLATE) ?: DEFAULT_SMS_TEMPLATE
     fun getNotificationTemplateSync(): String = prefs.getString(KEY_NOTIFICATION_TEMPLATE, DEFAULT_NOTIF_TEMPLATE) ?: DEFAULT_NOTIF_TEMPLATE
     fun getWakeWordSync(): String = prefs.getString(KEY_WAKE_WORD, DEFAULT_WAKE_WORD) ?: DEFAULT_WAKE_WORD
+    fun getVoiceStyleSync(): String = prefs.getString(KEY_TTS_VOICE_STYLE, DEFAULT_VOICE_STYLE) ?: DEFAULT_VOICE_STYLE
     fun getMonitoredPackagesSync(): Set<String> =
         prefs.getString(KEY_MONITORED_PACKAGES, DEFAULT_PACKAGES)?.split(",")?.toSet() ?: setOf("com.instagram.android")
     fun getTtsPitchSync(): Float = prefs.getFloat(KEY_TTS_PITCH, 1.0f)
-    fun getTtsSpeedSync(): Float = prefs.getFloat(KEY_TTS_SPEED, 1.0f)
+    fun getTtsSpeedSync(): Float = prefs.getFloat(KEY_TTS_SPEED, 1.05f)
 }
